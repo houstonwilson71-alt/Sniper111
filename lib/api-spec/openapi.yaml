@@ -3,20 +3,29 @@ info:
   # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: Meme Coin Sniper Trading Platform API
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
     description: Health operations
+  - name: config
+    description: Bot configuration
+  - name: tokens
+    description: Token discovery feed
+  - name: trades
+    description: Trade history
+  - name: positions
+    description: Open and closed positions
+  - name: performance
+    description: Performance statistics
 paths:
   /healthz:
     get:
       operationId: healthCheck
       tags: [health]
       summary: Health check
-      description: Returns server health status
       responses:
         "200":
           description: Healthy
@@ -24,13 +33,671 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  /config:
+    get:
+      operationId: getConfig
+      tags: [config]
+      summary: Get bot configuration
+      responses:
+        "200":
+          description: Current configuration
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BotConfig"
+    put:
+      operationId: updateConfig
+      tags: [config]
+      summary: Update bot configuration
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BotConfigInput"
+      responses:
+        "200":
+          description: Updated configuration
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BotConfig"
+
+  /bot/status:
+    get:
+      operationId: getBotStatus
+      tags: [config]
+      summary: Get bot running status
+      responses:
+        "200":
+          description: Bot status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BotStatus"
+
+  /bot/start:
+    post:
+      operationId: startBot
+      tags: [config]
+      summary: Start the trading bot
+      responses:
+        "200":
+          description: Bot started
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BotStatus"
+
+  /bot/stop:
+    post:
+      operationId: stopBot
+      tags: [config]
+      summary: Stop the trading bot
+      responses:
+        "200":
+          description: Bot stopped
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BotStatus"
+
+  /tokens:
+    get:
+      operationId: listTokens
+      tags: [tokens]
+      summary: List recently detected tokens with filter results
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            default: 0
+        - name: chain
+          in: query
+          schema:
+            type: string
+            enum: [solana, bsc, all]
+            default: all
+        - name: filterStatus
+          in: query
+          schema:
+            type: string
+            enum: [passed, failed, all]
+            default: all
+      responses:
+        "200":
+          description: Token list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TokenListResponse"
+
+  /tokens/{id}:
+    get:
+      operationId: getToken
+      tags: [tokens]
+      summary: Get token details
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Token details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Token"
+        "404":
+          description: Not found
+
+  /tokens/live-feed:
+    get:
+      operationId: getLiveFeed
+      tags: [tokens]
+      summary: Get the latest 50 tokens for the live scanner feed
+      responses:
+        "200":
+          description: Live feed
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Token"
+
+  /trades:
+    get:
+      operationId: listTrades
+      tags: [trades]
+      summary: List trade history
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            default: 0
+        - name: side
+          in: query
+          schema:
+            type: string
+            enum: [buy, sell, all]
+            default: all
+      responses:
+        "200":
+          description: Trade list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TradeListResponse"
+
+  /trades/{id}:
+    get:
+      operationId: getTrade
+      tags: [trades]
+      summary: Get trade details
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Trade
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Trade"
+        "404":
+          description: Not found
+
+  /positions:
+    get:
+      operationId: listPositions
+      tags: [positions]
+      summary: List open and closed positions
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [open, closed, all]
+            default: open
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+      responses:
+        "200":
+          description: Positions
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Position"
+
+  /positions/{id}:
+    get:
+      operationId: getPosition
+      tags: [positions]
+      summary: Get position details
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Position
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Position"
+        "404":
+          description: Not found
+
+  /performance/summary:
+    get:
+      operationId: getPerformanceSummary
+      tags: [performance]
+      summary: Get dashboard summary stats
+      responses:
+        "200":
+          description: Summary stats
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PerformanceSummary"
+
+  /performance/equity:
+    get:
+      operationId: getEquityCurve
+      tags: [performance]
+      summary: Get equity curve data points for the P&L chart
+      parameters:
+        - name: period
+          in: query
+          schema:
+            type: string
+            enum: [1d, 7d, 30d, all]
+            default: 7d
+      responses:
+        "200":
+          description: Equity curve data
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/EquityPoint"
+
+  /performance/chain-breakdown:
+    get:
+      operationId: getChainBreakdown
+      tags: [performance]
+      summary: Get P&L and win rate breakdown by chain
+      responses:
+        "200":
+          description: Chain breakdown
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ChainBreakdown"
+
 components:
   schemas:
     HealthStatus:
       type: object
+      required: [status]
       properties:
         status:
           type: string
-      required:
-        - status
 
+    BotConfig:
+      type: object
+      required:
+        - id
+        - chains
+        - minLiquidityUsd
+        - maxAgeSeconds
+        - minHolders
+        - maxTop10Pct
+        - maxRugScore
+        - minVolumeUsd
+        - buyAmountUsd
+        - slippageBps
+        - tp1Pct
+        - tp1SellPct
+        - tp2Pct
+        - tp2SellPct
+        - trailingStopPct
+        - timeExitMinutes
+        - enableSolana
+        - enableBsc
+        - updatedAt
+      properties:
+        id:
+          type: integer
+        chains:
+          type: array
+          items:
+            type: string
+        minLiquidityUsd:
+          type: number
+        maxAgeSeconds:
+          type: integer
+        minHolders:
+          type: integer
+        maxTop10Pct:
+          type: number
+        maxRugScore:
+          type: number
+        minVolumeUsd:
+          type: number
+        buyAmountUsd:
+          type: number
+        slippageBps:
+          type: integer
+        tp1Pct:
+          type: number
+        tp1SellPct:
+          type: number
+        tp2Pct:
+          type: number
+        tp2SellPct:
+          type: number
+        trailingStopPct:
+          type: number
+        timeExitMinutes:
+          type: integer
+        enableSolana:
+          type: boolean
+        enableBsc:
+          type: boolean
+        updatedAt:
+          type: string
+          format: date-time
+
+    BotConfigInput:
+      type: object
+      properties:
+        minLiquidityUsd:
+          type: number
+        maxAgeSeconds:
+          type: integer
+        minHolders:
+          type: integer
+        maxTop10Pct:
+          type: number
+        maxRugScore:
+          type: number
+        minVolumeUsd:
+          type: number
+        buyAmountUsd:
+          type: number
+        slippageBps:
+          type: integer
+        tp1Pct:
+          type: number
+        tp1SellPct:
+          type: number
+        tp2Pct:
+          type: number
+        tp2SellPct:
+          type: number
+        trailingStopPct:
+          type: number
+        timeExitMinutes:
+          type: integer
+        enableSolana:
+          type: boolean
+        enableBsc:
+          type: boolean
+
+    BotStatus:
+      type: object
+      required: [running, startedAt, stoppedAt]
+      properties:
+        running:
+          type: boolean
+        startedAt:
+          type: ["string", "null"]
+          format: date-time
+        stoppedAt:
+          type: ["string", "null"]
+          format: date-time
+
+    Token:
+      type: object
+      required:
+        - id
+        - chain
+        - address
+        - symbol
+        - name
+        - liquidityUsd
+        - holders
+        - ageSeconds
+        - top10Pct
+        - rugScore
+        - volumeUsd
+        - filterPassed
+        - detectedAt
+      properties:
+        id:
+          type: integer
+        chain:
+          type: string
+          enum: [solana, bsc]
+        address:
+          type: string
+        symbol:
+          type: string
+        name:
+          type: string
+        liquidityUsd:
+          type: number
+        holders:
+          type: integer
+        ageSeconds:
+          type: integer
+        top10Pct:
+          type: number
+        rugScore:
+          type: number
+        volumeUsd:
+          type: number
+        filterPassed:
+          type: boolean
+        failReasons:
+          type: ["array", "null"]
+          items:
+            type: string
+        detectedAt:
+          type: string
+          format: date-time
+        priceUsd:
+          type: ["number", "null"]
+        poolAddress:
+          type: ["string", "null"]
+
+    TokenListResponse:
+      type: object
+      required: [tokens, total]
+      properties:
+        tokens:
+          type: array
+          items:
+            $ref: "#/components/schemas/Token"
+        total:
+          type: integer
+
+    Trade:
+      type: object
+      required:
+        - id
+        - tokenId
+        - tokenSymbol
+        - tokenAddress
+        - chain
+        - side
+        - amountUsd
+        - priceUsd
+        - txHash
+        - status
+        - executedAt
+      properties:
+        id:
+          type: integer
+        tokenId:
+          type: integer
+        tokenSymbol:
+          type: string
+        tokenAddress:
+          type: string
+        chain:
+          type: string
+          enum: [solana, bsc]
+        side:
+          type: string
+          enum: [buy, sell]
+        amountUsd:
+          type: number
+        priceUsd:
+          type: number
+        txHash:
+          type: string
+        status:
+          type: string
+          enum: [pending, confirmed, failed]
+        feesUsd:
+          type: ["number", "null"]
+        pnlUsd:
+          type: ["number", "null"]
+        pnlPct:
+          type: ["number", "null"]
+        executedAt:
+          type: string
+          format: date-time
+        positionId:
+          type: ["integer", "null"]
+
+    TradeListResponse:
+      type: object
+      required: [trades, total]
+      properties:
+        trades:
+          type: array
+          items:
+            $ref: "#/components/schemas/Trade"
+        total:
+          type: integer
+
+    Position:
+      type: object
+      required:
+        - id
+        - tokenId
+        - tokenSymbol
+        - tokenAddress
+        - chain
+        - entryPriceUsd
+        - currentPriceUsd
+        - sizeUsd
+        - status
+        - openedAt
+        - tp1Hit
+        - tp2Hit
+        - trailingStopActive
+        - unrealisedPnlUsd
+        - unrealisedPnlPct
+        - peakPriceUsd
+      properties:
+        id:
+          type: integer
+        tokenId:
+          type: integer
+        tokenSymbol:
+          type: string
+        tokenAddress:
+          type: string
+        chain:
+          type: string
+          enum: [solana, bsc]
+        entryPriceUsd:
+          type: number
+        currentPriceUsd:
+          type: number
+        sizeUsd:
+          type: number
+        status:
+          type: string
+          enum: [open, closed]
+        openedAt:
+          type: string
+          format: date-time
+        closedAt:
+          type: ["string", "null"]
+          format: date-time
+        tp1Hit:
+          type: boolean
+        tp2Hit:
+          type: boolean
+        trailingStopActive:
+          type: boolean
+        stopLossPrice:
+          type: ["number", "null"]
+        unrealisedPnlUsd:
+          type: number
+        unrealisedPnlPct:
+          type: number
+        realisedPnlUsd:
+          type: ["number", "null"]
+        peakPriceUsd:
+          type: number
+
+    PerformanceSummary:
+      type: object
+      required:
+        - totalPnlUsd
+        - totalPnlPct
+        - winRate
+        - totalTrades
+        - winningTrades
+        - losingTrades
+        - openPositions
+        - tokensScannedToday
+        - tokensPassedToday
+        - avgHoldTimeMinutes
+        - bestTradeUsd
+        - worstTradeUsd
+      properties:
+        totalPnlUsd:
+          type: number
+        totalPnlPct:
+          type: number
+        winRate:
+          type: number
+        totalTrades:
+          type: integer
+        winningTrades:
+          type: integer
+        losingTrades:
+          type: integer
+        openPositions:
+          type: integer
+        tokensScannedToday:
+          type: integer
+        tokensPassedToday:
+          type: integer
+        avgHoldTimeMinutes:
+          type: number
+        bestTradeUsd:
+          type: number
+        worstTradeUsd:
+          type: number
+
+    EquityPoint:
+      type: object
+      required: [timestamp, equityUsd, pnlUsd]
+      properties:
+        timestamp:
+          type: string
+          format: date-time
+        equityUsd:
+          type: number
+        pnlUsd:
+          type: number
+
+    ChainBreakdown:
+      type: object
+      required: [chain, totalPnlUsd, winRate, tradeCount]
+      properties:
+        chain:
+          type: string
+        totalPnlUsd:
+          type: number
+        winRate:
+          type: number
+        tradeCount:
+          type: integer

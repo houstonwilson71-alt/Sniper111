@@ -1,0 +1,316 @@
+MVP System Architecture & Development Prompt
+For an automated, ultra-fast meme coin sniping and profit‑maximising trading platform on Solana and BNB Chain
+
+---
+
+1. Project Objective
+
+Build a SaaS‑ready Minimum Viable Product that:
+
+· Monitors new token listings on Solana and BNB Smart Chain (BSC) in real time.
+· Applies a multi‑dimensional safety/filtering engine (liquidity, rug‑pull risk, holder distribution, age, etc.).
+· Automatically executes a buy the instant a token passes all filters.
+· Systematically sells for maximum profit using configurable rule‑based / AI‑augmented exit strategies.
+· Exposes a website dashboard for configuration, live monitoring, and historical P&L.
+· Is horizontally scalable, low‑latency (<500ms from detection to buy submission), high‑throughput (capable of processing hundreds of new tokens per second), and built with state‑of‑the‑art technology.
+
+---
+
+2. System Architecture Overview
+
+Adopt a microservices + event‑driven architecture, deployed on Kubernetes.
+
+```
+[Blockchain Nodes (Solana/BSC)]
+        │
+        ▼
+[Token Listener Service]  ────  [Raw Token Events]
+        │
+        ▼
+[Event Bus (NATS / Kafka)]
+        │
+        ├──► [Filter Engine]         (liquidity, holders, age, rug check)
+        ├──► [Rug Analyzer Service]  (contract deep‑scan)
+        │
+        ▼
+[Trade Decision Engine]     (if pass → generate buy order)
+        │
+        ▼
+[Trade Executor Service]   (submit tx with MEV protection)
+        │
+        ▼
+[Position Manager]         (track open trades, trigger sells)
+        │
+        ▼
+[Website Backend (API)]    (REST + WebSocket)
+        │
+        ▼
+[Frontend Dashboard]       (React/Next.js)
+```
+
+All state is persisted in PostgreSQL, with Redis for caching, rate‑limiters, and real‑time leaderboards.
+
+---
+
+3. Technology Stack (Cutting Edge)
+
+Layer Technology Rationale
+High‑performance services Rust (Tokio) Zero‑cost abstractions, memory safety, unmatched concurrency for the listener, filter, and executor.
+Supplementary services Go Fast compile times, excellent gRPC/web support for the API backend.
+Message queue NATS JetStream (or Redpanda) Ultra‑low latency, at‑least‑once delivery, ideal for Solana‑speed events.
+Database PostgreSQL 16 + TimescaleDB Reliable relational store, time‑series extension for trade/price history.
+Cache / Pub‑Sub Redis Stack Caching filter results, rate‑limiting, real‑time dashboard WebSocket fan‑out.
+Container orchestration Kubernetes (k3s) + Helm Horizontal auto‑scaling, zero‑downtime deployments.
+Blockchain interaction (Solana) solana-client (Rust), Yellowstone gRPC (Geyser), Jupiter API v6 Direct streaming of account/program updates; best swap routes.
+Blockchain interaction (BSC) ethers-rs / go-ethereum, QuickNode WebSocket, PancakeSwap Router V2 Reliable WebSocket feeds, mempool monitoring.
+MEV protection Jito bundles (Solana), BloxRoute / private tx pool (BSC) Avoid sandwich attacks and front‑running.
+Rug detection On‑chain bytecode analysis + RugCheck.xyz API (fallback) Identify honey‑pots, non‑renounced ownership, hidden fees.
+Frontend Next.js 14 (App Router), TailwindCSS, shadcn/ui, Recharts Fast, SEO‑friendly, beautiful reactive dashboards.
+API Gateway gRPC‑web + REST (Envoy / Kong) Efficient communication between services and frontend.
+Authentication Clerk / NextAuth.js (Web3 wallet login) Secure, out‑of‑the‑box wallet‑based auth.
+Smart contract wallet (optional) Solana Program (Anchor) for vaults / BSC Safe Non‑custodial delegated trading (Phase 2).
+
+---
+
+4. Detailed Component Requirements
+
+4.1 Token Discovery & Listener Service
+
+· Solana:
+  · Connect to a Yellowstone gRPC endpoint (e.g., Helius, Triton) subscribing to ProgramSubscribe for the Raydium Liquidity Pool V4, Orca Whirlpools, and Meteora DLMM programs.
+  · Alternatively, parse new token mint transactions from the block stream.
+  · Extract: token mint address, pool address, base token (SOL/USDC), initial price, block timestamp.
+· BSC:
+  · Subscribe to PairCreated events on PancakeSwap Factory (main & testnet) via WebSocket.
+  · Extract: pair address, token0, token1, creation block.
+· Publish a normalised NewTokenDetected event to NATS: { chain, tokenAddress, poolAddress, baseToken, timestamp }.
+
+4.2 On‑Chain Data Fetcher & Filter Engine
+
+Consume NewTokenDetected events. For each token, fetch (in parallel):
+
+· Liquidity (in USD):
+  · Solana: get pool reserve balances via getAccountInfo, compute USD value using Jupiter price API.
+  · BSC: call getReserves() on pair, multiply by token price from a price oracle (Binance Oracle, Chainlink, or DexScreener).
+· Holder count:
+  · Solana: use getTokenLargestAccounts, or Helius Digital Asset Standard API.
+  · BSC: use token.balanceOf events (BSCScan API if rate‑limited).
+· Age: current time – pool creation timestamp.
+· Top‑holder concentration: percentage of total supply held by top 10 addresses.
+· Rug‑pull score (see 4.3).
+· Social signals (optional MVP): Tweet count, Telegram members via third‑party APIs.
+
+Filtering logic (all parameters configurable via dashboard):
+
+· Liquidity ≥ $minLiquidity (default $5,000)
+· Age ≤ maxAge (default 300 seconds – fresh)
+· Holder count ≥ minHolders (default 25)
+· Top‑10 holder concentration ≤ maxTop10Pct (default 35%)
+· Rug score ≤ maxRugScore (default 2 on a scale 0‑10)
+· DEX volume (1min) ≥ minVol (optional)
+
+Pass event → FilterPassed published.
+
+4.3 Rug Analyzer Service
+
+Must perform static contract analysis with minimal RPC calls:
+
+· Solana:
+  · Fetch program account of the token mint.
+  · Verify: mint authority is revoked (None), freeze authority is revoked.
+  · Check if the token program is standard Token‑2022 with transfer fees; flag hidden fees.
+  · Analyse LP token ownership: if LP tokens are not burned/locked (check getTokenAccountBalance of the LP mint and known burn address), increase rug score.
+  · Optionally integrate RugCheck.xyz or SolSniffer for a confidence score.
+· BSC:
+  · Fetch token contract bytecode.
+  · Check for: owner() function returning a non‑zero address, mint() function not behind a onlyOwner modifier (malicious), trading‑enable flags (_transferEnabled false), high sell tax (sellFee > 10%).
+  · Use go‑ethereum’s eth_call to simulate a buy/sell and measure tax.
+  · Integrate a local honeypot detector (simulate buy and sell in a fork environment using Hardhat/Ganache – for MVP a lightweight simulation via call).
+
+Rug score calculated and attached to the token event.
+
+4.4 Trade Executor (Buy)
+
+Upon FilterPassed:
+
+· Determine buy amount (fixed USD amount, e.g., $50, configured per strategy).
+· Solana:
+  · Build a swap transaction via Jupiter API (quote + swap instructions) with:
+    · slippageBps = configurable (default 15%).
+    · dynamicComputeUnitLimit = true, prioritizationFeeLamports = aggressive (auto‑tune based on network load).
+  · Wrap the transaction in a Jito bundle (if using Jito validator) with a tip to improve inclusion and avoid sandwiches.
+  · Sign and send via a dedicated RPC node (private Helius/Triton).
+· BSC:
+  · Use PancakeSwap Router’s swapExactETHForTokens (or tokens) with:
+    · gasPrice = current fast * 1.5 (or use EIP‑1559 maxPriorityFeePerGas).
+    · amountOutMin based on expected output – slippage.
+  · Submit transaction through BloxRoute or Flashbots Protect to avoid public mempool.
+· On success: publish BuyExecuted event with tx hash, price, amount, fees.
+· On failure (slippage, rug tx fails): log & blacklist temporarily.
+
+4.5 Position Manager & Sell Strategy Engine
+
+· Track open positions in PostgreSQL: token, entry price, current price, amount, stop‑loss/take‑profit levels, partial‑exit state.
+· Continuously monitor price via WebSocket streams (Jupiter price API or DexScreener socket, Binance Oracle for BSC).
+· Sell Strategy (configurable):
+  · Default MVP strategy (Stacked Take‑Profit + Trailing Stop):
+    · Take‑Profit 1 (TP1): +100% → sell 50% of position.
+    · TP2: +300% → sell remaining 50%.
+    · Trailing Stop‑Loss: activate after TP1 hit, set at 25% drawdown from highest price since entry. If price drops 25% from peak, sell everything.
+    · Time‑based exit: if not profitable within 30 min, sell at market.
+  · Advanced (post‑MVP): AI‑driven exit using a lightweight LSTM model trained on meme coin pump‑and‑dump patterns (optional).
+· Order splitting: to avoid price impact, split sells into multiple small chunks with random delays (TWAP‑style).
+· Publish SellExecuted events, update P&L.
+
+4.6 Database & Event Bus
+
+· PostgreSQL schema:
+  · tokens: (id, chain, address, symbol, created_at, ...)
+  · filter_results: (token_id, liquidity, holders, rug_score, passed, timestamp)
+  · trades: (id, token_id, side, amount, price, tx_hash, timestamp, fees)
+  · positions: (token_id, entry_price, current_size, status, stop_loss, take_profits jsonb)
+· NATS streams: tokens.new, tokens.filter_passed, trades.executed.
+· Use Redis streams for real‑time frontend updates (dashboard).
+
+4.7 Frontend Website (MVP Dashboard)
+
+User Journeys:
+
+· Wallet connect (MetaMask / Phantom) for authentication only (read‑only access initially).
+· Configuration Panel:
+  · Chains to monitor (Solana / BSC toggles).
+  · Filter sliders: min liquidity, max age, min holders, max top‑10 %, max rug score.
+  · Buy amount ($), slippage.
+  · Sell strategy selection & parameters.
+  · Activate/deactivate bot.
+· Live Feed:
+  · Streaming table of tokens being scanned, colour‑coded pass/fail.
+  · Real‑time trade log (buy/sell) with P&L.
+· Performance:
+  · Total P&L, win rate, historical chart of equity curve (using Recharts).
+  · Positions overview.
+· Technology:
+  · Next.js App Router, Tailwind, shadcn/ui components.
+  · Real‑time data via a WebSocket connection to the backend (using socket.io or native WS through API Gateway).
+  · State management: Zustand for client state, React Query for server state.
+· Backend for Frontend (BFF): a Go service serving REST + gRPC‑Web, aggregating data from PostgreSQL/Redis.
+
+---
+
+5. Filtering Criteria (Configurable Defaults)
+
+Parameter Default Range
+Minimum Liquidity (USD) $5,000 1,000 – 100,000
+Maximum Token Age (seconds) 300 30 – 600
+Minimum Unique Holders 25 10 – 200
+Max Top‑10 Holder Concentration 35% 10% – 50%
+Max Rug Score (0‑10) 2 0 – 5
+Minimum 1‑minute Volume (USD) $1,000 500 – 50,000
+Blacklisted tokens empty array
+
+Each filter can be toggled on/off. A token must pass all active filters.
+
+---
+
+6. Buy Execution Logic (Precision & Speed)
+
+· Pre‑computed transaction templates for each DEX to shave milliseconds.
+· On filter pass, the executor picks the template, fills in the token, amount, slippage, and signs.
+· Use connection pools with warmed‑up RPC connections (keep‑alive).
+· Non‑blocking concurrency: the listener must not wait for buy completion; buy submissions are fire‑and‑forget with async confirmations.
+· Retry policy: if transaction fails due to slippage, re‑fetch quote and retry once with 20% increased slippage; if still fails, abandon.
+· Front‑running protection:
+  · Solana: Jito bundles, sent directly to the Jito block engine.
+  · BSC: private transaction via Flashbots Protect / BloxRoute.
+· Record all attempts in DB for audit.
+
+---
+
+7. Sell Strategy Details (Highest Profit)
+
+The MVP must implement a multi‑level trailing stop strategy:
+
+1. First take‑profit at +100%: sell 50% of the position.
+2. Start trailing stop‑loss: initial stop set at break‑even (or 10% profit). After each new high, move stop to 75% of the peak (i.e. 25% trailing). Update on every price tick.
+3. Second take‑profit at +500%: sell remaining 50%.
+4. If trailing stop hit, sell entire remaining position at market.
+5. Time‑based backstop: if position age > 2 hours and unrealised profit < 20%, market sell.
+   All parameters customisable from the frontend.
+
+For the future, integrate an on‑chain DCA sell using Jupiter DCA / Meteora dynamic fees to automate limit orders without custody.
+
+---
+
+8. Latency, Throughput, and Scalability
+
+· Latency target: < 300ms from token detection to filter completion, < 200ms from filter pass to buy transaction submission.
+· Throughput: handle 500 new tokens/minute without queue back‑pressure.
+· Scalability:
+  · Stateless services; scale horizontally based on NATS queue length (KEDA autoscaling).
+  · Shard NATS topics per chain if needed.
+  · Redis cluster for dashboard caching.
+· Geographical optimisation: deploy nodes in data centres close to Solana/BSC validator clusters (e.g., Amsterdam for Solana, Frankfurt for BSC).
+
+---
+
+9. Security & Key Management
+
+· Private key storage: encrypted in HashiCorp Vault (or Kubernetes Secrets sealed with SOPS). Keys never exposed to the frontend.
+· API security: gRPC/REST endpoints protected by JWT from Clerk/NextAuth. Role‑based access (admin, trader).
+· Transaction signing isolated in a dedicated signing service, with no internet access beyond the RPC node (network policy).
+· Smart contract wallet (Phase 2 MVP enhancement): deploy a simple vault program on Solana and a Safe‑like contract on BSC. Users deposit funds; the bot can execute trades via a validated program instruction without holding user keys. This eliminates custodian risk. For MVP, start with a single platform‑managed hot wallet and clear disclaimers.
+
+---
+
+10. API & Integration Points
+
+· DEX aggregator: Jupiter API v6 (Solana) – use the /quote and /swap endpoints with dynamicComputeUnitLimit.
+· PancakeSwap: on‑chain interaction via router contract (BSC).
+· Data feeds: Helius webhook / Yellowstone gRPC (Solana), QuickNode WebSocket (BSC).
+· External verification: RugCheck.xyz API, DexScreener API (for backup holder data).
+· Socials (optional): LunarCrush or Twitter API for trending score.
+
+---
+
+11. Deployment & DevOps
+
+· Containerisation: multi‑stage Docker builds for Rust and Go services.
+· CI/CD: GitHub Actions → build, test, push to container registry, deploy to Kubernetes via ArgoCD.
+· Monitoring: Prometheus metrics (trade count, latency, errors), Grafana dashboards, logs aggregated to Loki.
+· Local development: docker‑compose with solana‑test‑validator and ganache fork for BSC.
+
+---
+
+12. MVP Scope & Deliverables
+
+Must have (MVP):
+
+· Token detection on Solana (Raydium) and BSC (PancakeSwap) – two chains.
+· Filtering engine with all parameters.
+· Rug check (mint/freeze authority, top holder, tax simulation).
+· Automated buy with MEV protection.
+· Basic trailing stop‑loss sell (configurable).
+· Dashboard: settings, live token scanner, trade log, simple P&L chart.
+· Single user / admin bot (multi‑user via accounts later).
+
+Nice to have (post‑MVP):
+
+· Multi‑user SaaS with separate vaults.
+· AI‑powered exit predictor.
+· Telegram bot alerts.
+· Backtesting sandbox.
+· Support for additional chains (Base, Ethereum).
+
+---
+
+13. Success Criteria
+
+· The system buys a token within 2 seconds of it meeting all filters.
+· Profitable exits > 60% of trades in simulated dry‑run with real‑time data.
+· Zero loss of funds due to rug‑pulls that passed the filter.
+· Dashboard renders live data with <1s delay.
+· Sustains 500 tokens/minute without errors for 1 hour.
+
+---
+
+Deliver this prompt to your engineering team; it contains everything needed to blueprint, build, and launch the MVP. The design is production‑grade, leans on battle‑tested Rust/Go performance, and puts you months ahead of competitors.
