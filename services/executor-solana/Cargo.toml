@@ -1,0 +1,27 @@
+[package]
+name = "executor-solana"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+tokio = { version = "1.43", features = ["full"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+anyhow = "1.0"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+redis = { version = "0.27", features = ["tokio-comp", "connection-manager"] }
+reqwest = { version = "0.12", features = ["json", "rustls-tls"], default-features = false }
+chrono = { version = "0.4", features = ["serde"] }
+solana-sdk = "2.1"
+solana-client = "2.1"
+solana-transaction-status = "2.1"
+solana-program = "2.1"
+spl-token = "6.0"
+spl-associated-token-account = "5.0"
+common = { path = "../common" }
+jito-json-rpc-client = { git = "https://github.com/jito-labs/jito-rust-rpc.git", optional = true }
+
+[features]
+default = []
+jito = ["dep:jito-json-rpc-client"]

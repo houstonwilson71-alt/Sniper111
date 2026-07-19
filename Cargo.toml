@@ -1,0 +1,20 @@
+[workspace]
+members = [
+  "services/common",
+  "services/listener-solana",
+  "services/listener-bsc",
+  "services/executor-solana",
+  "services/executor-bsc",
+]
+resolver = "2"
+
+[workspace.dependencies]
+tokio = { version = "1.43", features = ["full"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+anyhow = "1.0"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+redis = { version = "0.27", features = ["tokio-comp", "connection-manager"] }
+reqwest = { version = "0.12", features = ["json", "rustls-tls"], default-features = false }
+chrono = { version = "0.4", features = ["serde"] }

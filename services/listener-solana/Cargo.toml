@@ -1,0 +1,28 @@
+[package]
+name = "listener-solana"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+tokio = { version = "1.43", features = ["full"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+anyhow = "1.0"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+redis = { version = "0.27", features = ["tokio-comp", "connection-manager"] }
+futures = "0.3"
+reqwest = { version = "0.12", features = ["json", "rustls-tls"], default-features = false }
+chrono = { version = "0.4", features = ["serde"] }
+base64 = "0.22"
+bs58 = "0.5"
+solana-sdk = "2.1"
+solana-client = "2.1"
+solana-account-decoder = "2.1"
+spl-token = "6.0"
+common = { path = "../common" }
+raydium-amm-v3 = { git = "https://github.com/raydium-io/raydium-amm-v3.git", optional = true }
+
+[features]
+default = []
+grpc = ["dep:raydium-amm-v3"]
