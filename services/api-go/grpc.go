@@ -145,7 +145,7 @@ func (b *engineBridge) handleEvent(ev *engine.EngineEvent) {
 		channel = "tokens:new"
 		t := p.TokenDetected
 		payload = Token{
-			ID:                     t.ID,
+			ID:                     t.Id,
 			Chain:                  Chain(t.Chain),
 			Address:                t.Address,
 			Symbol:                 t.Symbol,
@@ -171,8 +171,8 @@ func (b *engineBridge) handleEvent(ev *engine.EngineEvent) {
 		channel = "trades:new"
 		t := p.TradeUpdate
 		payload = Trade{
-			ID:          t.ID,
-			TokenID:     t.TokenID,
+			ID:          t.Id,
+			TokenID:     t.TokenId,
 			TokenSymbol: t.TokenSymbol,
 			Chain:       Chain(t.Chain),
 			Side:        t.Side,
@@ -190,8 +190,8 @@ func (b *engineBridge) handleEvent(ev *engine.EngineEvent) {
 		channel = "positions:new"
 		pu := p.PositionUpdate
 		payload = Position{
-			ID:                 pu.ID,
-			TokenID:            pu.TokenID,
+			ID:                 pu.Id,
+			TokenID:            pu.TokenId,
 			TokenSymbol:        pu.TokenSymbol,
 			Chain:              Chain(pu.Chain),
 			EntryPriceUsd:      pu.EntryPriceUsd,
