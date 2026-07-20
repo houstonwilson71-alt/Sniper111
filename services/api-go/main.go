@@ -42,8 +42,8 @@ func main() {
 	// WebSocket upgrade endpoint.
 	r.GET("/api/ws", wss.handle)
 
-	// Serve static Next.js build when running outside Replit.
-	r.Static("/", "/app/dist")
+	// Note: static Next.js files are served by the dedicated frontend service in Docker.
+	// r.Static("/", "/app/dist") would conflict with the /api catch-all route.
 
 	log.Printf("API server listening on :%s", port)
 	if err := r.Run(":" + port); err != nil {
