@@ -1856,7 +1856,7 @@ version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a75b8549488b4715defcb0d8a8a1c1c76a80661b5fa106b4ca0e7fce59d7d875"
 dependencies = [
- "five8_core 0.1.2",
+ "five8_core",
 ]
 
 [[package]]
@@ -1865,7 +1865,7 @@ version = "1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "23f76610e969fa1784327ded240f1e28a3fd9520c9cec93b636fcf62dd37f772"
 dependencies = [
- "five8_core 1.0.0",
+ "five8_core",
 ]
 
 [[package]]
@@ -1874,7 +1874,7 @@ version = "0.1.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "26dec3da8bc3ef08f2c04f61eab298c3ab334523e55f076354d6d6f613799a7b"
 dependencies = [
- "five8_core 0.1.2",
+ "five8_core",
 ]
 
 [[package]]
@@ -1883,7 +1883,7 @@ version = "1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1a0f1728185f277989ca573a402716ae0beaaea3f76a8ff87ef9dd8fb19436c5"
 dependencies = [
- "five8_core 1.0.0",
+ "five8_core",
 ]
 
 [[package]]
@@ -1891,12 +1891,6 @@ name = "five8_core"
 version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2551bf44bc5f776c15044b9b94153a00198be06743e262afaaa61f11ac7523a5"
-
-[[package]]
-name = "five8_core"
-version = "1.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "059c31d7d36c43fe39d89e55711858b4da8be7eb6dabac23c7289b1a19489406"
 
 [[package]]
 name = "fixed-hash"
@@ -4873,9 +4867,9 @@ dependencies = [
 
 [[package]]
 name = "solana-address"
-version = "2.6.1"
+version = "2.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "39c93e262f671bf402e1040e4a7e40b05d81da5956c7681948c975a0997517bb"
+checksum = "5f08236dacd0e6dc8234becef58e27c8567856644ef509d7e97957d55a91dc72"
 dependencies = [
  "borsh 1.8.0",
  "five8 1.0.0",
@@ -5750,9 +5744,9 @@ dependencies = [
 
 [[package]]
 name = "solana-pubkey"
-version = "4.2.0"
+version = "4.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7db719574990de7e8b0f55a8593ac92a5ccb42c8ce67b3e4bf05b139d5d9ee71"
+checksum = "1b06bd918d60111ee1f97de817113e2040ca0cedb740099ee8d646233f6b906c"
 dependencies = [
  "solana-address",
 ]
@@ -7414,9 +7408,9 @@ checksum = "712e227841d057c1ee1cd2fb22fa7e5a5461ae8e48fa2ca79ec42cfc1931183f"
 
 [[package]]
 name = "wincode"
-version = "0.5.5"
+version = "0.4.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "66d967db7705dc29120bb6e8ce5b5a2e27734ed5976d1c904e95bd238d1c3c5a"
+checksum = "657690780ce23e6f66576a782ffd88eb353512381817029cc1d7a99154bb6d1f"
 dependencies = [
  "pastey",
  "proc-macro2",
@@ -7750,7 +7744,7 @@ dependencies = [
  "prost-types 0.14.4",
  "protoc-bin-vendored",
  "siphasher 1.0.3",
- "solana-pubkey 4.2.0",
+ "solana-pubkey 4.1.0",
  "thiserror 2.0.19",
  "tonic 0.14.6",
  "tonic-prost",

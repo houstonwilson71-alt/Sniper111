@@ -27,7 +27,7 @@ func main() {
 
 	// Fan out pub/sub events to WebSocket clients.
 	go pubsub.subscribe(func(channel string, payload []byte) {
-		wss.broadcast(payload)
+		wss.broadcastMsg(payload)
 	})
 
 	// Bidirectional gRPC connection to the Rust engine.

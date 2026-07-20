@@ -33,10 +33,7 @@ func mustInitEngineBridge(wss *webSocketHub, db *DB) *engineBridge {
 		addr = "rust-engine:50051"
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	conn, err := grpc.DialContext(ctx, addr, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithBlock())
+	conn, err := grpc.NewClient(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		log.Printf("WARN: could not connect to Rust engine gRPC at %s: %v. Dashboard will show local DB state only.", addr, err)
 		return &engineBridge{wss: wss, db: db}
@@ -58,7 +55,9 @@ func mustInitEngineBridge(wss *webSocketHub, db *DB) *engineBridge {
 
 	// Send the current config once at startup.
 	cfg, _ := db.GetConfig()
-	bridge.sendConfig(cfg)
+	if cfg != nil {
+		bridge.sendConfig(*cfg)
+	}
 
 	// Receive events from the Rust engine and fan out to WebSocket clients.
 	go bridge.receiveLoop()
@@ -189,24 +188,24 @@ func (b *engineBridge) handleEvent(ev *engine.EngineEvent) {
 		}
 	case *engine.EngineEvent_PositionUpdate:
 		channel = "positions:new"
-		p := p.PositionUpdate
+		pu := p.PositionUpdate
 		payload = Position{
-			ID:                 p.ID,
-			TokenID:            p.TokenID,
-			TokenSymbol:        p.TokenSymbol,
-			Chain:              Chain(p.Chain),
-			EntryPriceUsd:      p.EntryPriceUsd,
-			CurrentPriceUsd:    p.CurrentPriceUsd,
-			PeakPriceUsd:       p.PeakPriceUsd,
-			SizeUsd:            p.SizeUsd,
-			Status:             p.Status,
-			Tp1Hit:             p.Tp1Hit,
-			TrailingStopActive: p.TrailingStopActive,
-			StopLossPrice:      p.StopLossPrice,
-			UnrealisedPnlUsd:   p.UnrealisedPnlUsd,
-			UnrealisedPnlPct:   p.UnrealisedPnlPct,
-			OpenedAt:           p.OpenedAt,
-			ClosedAt:           p.ClosedAt,
+			ID:                 pu.ID,
+			TokenID:            pu.TokenID,
+			TokenSymbol:        pu.TokenSymbol,
+			Chain:              Chain(pu.Chain),
+			EntryPriceUsd:      pu.EntryPriceUsd,
+			CurrentPriceUsd:    pu.CurrentPriceUsd,
+			PeakPriceUsd:       pu.PeakPriceUsd,
+			SizeUsd:            pu.SizeUsd,
+			Status:             pu.Status,
+			Tp1Hit:             pu.Tp1Hit,
+			TrailingStopActive: pu.TrailingStopActive,
+			StopLossPrice:      pu.StopLossPrice,
+			UnrealisedPnlUsd:   pu.UnrealisedPnlUsd,
+			UnrealisedPnlPct:   pu.UnrealisedPnlPct,
+			OpenedAt:           pu.OpenedAt,
+			ClosedAt:           pu.ClosedAt,
 		}
 	case *engine.EngineEvent_Log:
 		channel = "log"
