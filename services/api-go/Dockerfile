@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1
-FROM golang:1.23-alpine AS builder
+FROM golang:1.25-alpine AS builder
 RUN apk add --no-cache git ca-certificates
 
 # Preserve the project's relative-path layout so the
@@ -15,7 +15,7 @@ RUN go mod download
 
 # Copy source and the generated protobuf bindings.
 COPY services/api-go ./
-COPY common/proto/engine ../common/proto/engine
+COPY common/proto/engine /src/common/proto/engine
 
 RUN CGO_ENABLED=0 GOOS=linux go build -o /app/api .
 
