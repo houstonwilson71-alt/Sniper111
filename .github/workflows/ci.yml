@@ -1,0 +1,77 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  typecheck-and-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.26.1
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Typecheck all packages
+        run: pnpm run typecheck
+
+      - name: Build frontend
+        run: pnpm --filter @workspace/trading-dashboard run build
+
+      - name: Build Node API (Replit preview)
+        run: pnpm --filter @workspace/api-server run build
+
+  go-backend-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.23'
+
+      - name: Go mod tidy
+        working-directory: ./services/api-go
+        run: go mod tidy
+
+      - name: Go build
+        working-directory: ./services/api-go
+        run: go build ./...
+
+      - name: Go vet
+        working-directory: ./services/api-go
+        run: go vet ./...
+
+  rust-engine-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Install protoc
+        run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
+
+      - name: Build Rust engine release
+        working-directory: ./rust-engine
+        run: cargo build --release
+
+  docker-compose-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build all Docker images
+        run: docker-compose build --parallel

@@ -15,6 +15,7 @@ import { AlertTriangle, Play, Square, ShieldAlert, ShieldCheck } from "lucide-re
 import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { useEvmWallet } from "@/components/providers";
+import { useWalletBalances } from "@/lib/wallet";
 import { type BotConfig } from "@workspace/common";
 
 export default function ConfigPage() {
@@ -25,6 +26,7 @@ export default function ConfigPage() {
 
   const solanaWallet = useWallet();
   const { address: bscAddress, connect: connectBsc } = useEvmWallet();
+  const balances = useWalletBalances();
 
   const [form, setForm] = useState<Partial<BotConfig>>({});
   const [solKey, setSolKey] = useState("");
@@ -135,6 +137,9 @@ export default function ConfigPage() {
               {solanaWallet.connected && solanaWallet.publicKey && (
                 <p className="text-xs text-zinc-400">Connected: {solanaWallet.publicKey.toBase58()}</p>
               )}
+              <p className="text-xs text-emerald-400">
+                Balance: {balances.solana.loading ? "Loading..." : balances.solana.error ? balances.solana.error : balances.solana.sol !== null ? `${balances.solana.sol.toFixed(4)} SOL` : "—"}
+              </p>
               <div className="space-y-1">
                 <Label className="text-xs">Or paste Solana private key (base58)</Label>
                 <Input type="password" value={solKey} onChange={(e) => setSolKey(e.target.value)} placeholder="[encrypted]" />
@@ -150,6 +155,9 @@ export default function ConfigPage() {
                   Connect
                 </Button>
               </div>
+              <p className="text-xs text-emerald-400">
+                Balance: {balances.bsc.loading ? "Loading..." : balances.bsc.error ? balances.bsc.error : balances.bsc.bnb !== null ? `${balances.bsc.bnb.toFixed(4)} BNB` : "—"}
+              </p>
               <div className="space-y-1">
                 <Label className="text-xs">Or paste BSC private key (0x...)</Label>
                 <Input type="password" value={bscKey} onChange={(e) => setBscKey(e.target.value)} placeholder="[encrypted]" />

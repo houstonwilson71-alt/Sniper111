@@ -1,0 +1,155 @@
+syntax = "proto3";
+
+package engine;
+
+option go_package = "github.com/houstonwilson71-alt/sniper111/common/proto/engine";
+
+// ---------------------------------------------------------------------------
+// Config service: Go backend streams config to Rust engine and receives events.
+// ---------------------------------------------------------------------------
+
+service Engine {
+  // Bidirectional stream: Go backend sends commands/config, Rust engine streams events.
+  rpc Connect(stream EngineCommand) returns (stream EngineEvent);
+}
+
+message EngineCommand {
+  oneof payload {
+    BotConfig config = 1;
+    ControlCommand control = 2;
+  }
+}
+
+message ControlCommand {
+  enum Action {
+    START = 0;
+    STOP = 1;
+    EMERGENCY_STOP = 2;
+    RESET_EMERGENCY = 3;
+  }
+  Action action = 1;
+  string reason = 2;
+}
+
+message BotConfig {
+  bool enable_solana = 1;
+  bool enable_bsc = 2;
+  double min_liquidity_usd = 3;
+  int32 max_token_age_seconds = 4;
+  int32 min_holders = 5;
+  double max_top10_pct = 6;
+  double max_rug_score = 7;
+  double min_volume_usd = 8;
+  double buy_amount_sol = 9;
+  double buy_amount_bnb = 10;
+  double slippage_pct = 11;
+  int64 jito_tip_lamports = 12;
+  double tp1_pct = 13;
+  double tp1_sell_pct = 14;
+  double trailing_stop_pct = 15;
+  int32 time_exit_minutes = 16;
+  double time_exit_min_profit_pct = 17;
+  bool enabled = 18;
+}
+
+message EngineEvent {
+  oneof payload {
+    TokenDetected token_detected = 1;
+    TokenFiltered token_filtered = 2;
+    BuySignal buy_signal = 3;
+    SellSignal sell_signal = 4;
+    TradeUpdate trade_update = 5;
+    PositionUpdate position_update = 6;
+    LogMessage log = 7;
+  }
+}
+
+message TokenDetected {
+  string id = 1;
+  string chain = 2;
+  string address = 3;
+  string symbol = 4;
+  string name = 5;
+  double liquidity_usd = 6;
+  int32 holders = 7;
+  int32 age_seconds = 8;
+  double top10_pct = 9;
+  double rug_score = 10;
+  double volume_usd = 11;
+  double price_usd = 12;
+  bool filter_passed = 13;
+  repeated string fail_reasons = 14;
+  string detected_at = 15;
+  string pool_address = 16;
+  bool mint_authority_revoked = 17;
+  bool freeze_authority_revoked = 18;
+  bool honeypot = 19;
+  double buy_tax_pct = 20;
+  double sell_tax_pct = 21;
+}
+
+message TokenFiltered {
+  string token_id = 1;
+  bool passed = 2;
+  repeated string reasons = 3;
+}
+
+message BuySignal {
+  string token_id = 1;
+  string chain = 2;
+  string token_address = 3;
+  string token_symbol = 4;
+  double amount_usd = 5;
+  double slippage_pct = 6;
+  int64 jito_tip_lamports = 7;
+}
+
+message SellSignal {
+  string position_id = 1;
+  string token_id = 2;
+  string reason = 3;
+  double sell_pct = 4;
+  double target_price_usd = 5;
+}
+
+message TradeUpdate {
+  string id = 1;
+  string token_id = 2;
+  string token_symbol = 3;
+  string chain = 4;
+  string side = 5;
+  double amount_usd = 6;
+  double price_usd = 7;
+  string tx_hash = 8;
+  string status = 9;
+  double fees_usd = 10;
+  double pnl_usd = 11;
+  double pnl_pct = 12;
+  string executed_at = 13;
+  string sell_reason = 14;
+}
+
+message PositionUpdate {
+  string id = 1;
+  string token_id = 2;
+  string token_symbol = 3;
+  string chain = 4;
+  double entry_price_usd = 5;
+  double current_price_usd = 6;
+  double peak_price_usd = 7;
+  double size_usd = 8;
+  string status = 9;
+  bool tp1_hit = 10;
+  bool trailing_stop_active = 11;
+  double stop_loss_price = 12;
+  double unrealised_pnl_usd = 13;
+  double unrealised_pnl_pct = 14;
+  string opened_at = 15;
+  string closed_at = 16;
+}
+
+message LogMessage {
+  string level = 1;
+  string message = 2;
+  string timestamp = 3;
+}

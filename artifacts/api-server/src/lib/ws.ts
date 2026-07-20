@@ -2,6 +2,7 @@ import type { Server } from "http";
 import { WebSocketServer, WebSocket } from "ws";
 import { logger } from "./logger";
 import { ensureRedis, redisClient } from "./redis";
+import { subscribeNats } from "./nats";
 import { CHANNELS } from "@workspace/common";
 
 let wss: WebSocketServer | null = null;
@@ -19,7 +20,8 @@ export function attachWebSocket(server: Server): void {
 
   // Subscribe to Redis channels and fan-out to dashboard clients
   ensureRedis()
-    .then(async () => {
+    .then(async (ready) => {
+      if (!ready) return;
       const subscriber = redisClient.duplicate();
       await subscriber.connect();
       for (const channel of Object.values(CHANNELS)) {
@@ -29,6 +31,11 @@ export function attachWebSocket(server: Server): void {
       }
     })
     .catch((err) => logger.error({ err }, "WebSocket Redis setup failed"));
+
+  // Subscribe to NATS and fan-out to dashboard clients
+  subscribeNats((channel, payload) => {
+    broadcast(channel, JSON.stringify({ channel, payload }));
+  }).catch((err) => logger.error({ err }, "WebSocket NATS setup failed"));
 }
 
 function broadcast(channel: string, message: string): void {

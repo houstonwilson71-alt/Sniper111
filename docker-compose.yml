@@ -12,6 +12,7 @@ services:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      - ./lib/db/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U sniper -d sniper"]
       interval: 5s
@@ -29,16 +30,17 @@ services:
       timeout: 5s
       retries: 10
 
+  # Go backend: serves the Next.js frontend, REST + WebSocket endpoints, and bridges to the Rust engine via gRPC.
   api:
     build:
       context: .
-      dockerfile: ./artifacts/api-server/Dockerfile
+      dockerfile: ./services/api-go/Dockerfile
     container_name: sniper-api
     environment:
-      NODE_ENV: production
       PORT: 5000
       DATABASE_URL: postgresql://sniper:sniper@postgres:5432/sniper
       REDIS_URL: redis://redis:6379
+      ENGINE_GRPC_ADDR: rust-engine:50051
       SESSION_SECRET: ${SESSION_SECRET:-change-me-in-production}
       ENCRYPTION_KEY: ${ENCRYPTION_KEY:-change-me-in-production}
       INTERNAL_API_TOKEN: ${INTERNAL_API_TOKEN:-change-me-in-production}
@@ -50,8 +52,43 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      rust-engine:
+        condition: service_started
     env_file:
       - .env
+
+  # Rust engine: unified chain listeners, filter, safety, execution and position monitoring.
+  rust-engine:
+    build:
+      context: .
+      dockerfile: ./rust-engine/Dockerfile
+    container_name: sniper-rust-engine
+    environment:
+      ENGINE_GRPC_ADDR: 0.0.0.0:50051
+      REDIS_URL: redis://redis:6379
+      SOLANA_RPC_URL: ${SOLANA_RPC_URL:-https://api.devnet.solana.com}
+      SOLANA_WS_URL: ${SOLANA_WS_URL}
+      YELLOWSTONE_ENDPOINT: ${YELLOWSTONE_ENDPOINT}
+      YELLOWSTONE_TOKEN: ${YELLOWSTONE_TOKEN}
+      HELIUS_API_KEY: ${HELIUS_API_KEY}
+      JUPITER_API_URL: ${JUPITER_API_URL:-https://quote-api.jup.ag/v6}
+      JITO_BLOCK_ENGINE_URL: ${JITO_BLOCK_ENGINE_URL}
+      JITO_TIP_LAMPORTS: ${JITO_TIP_LAMPORTS:-10000}
+      BSC_RPC_URL: ${BSC_RPC_URL:-https://data-seed-prebsc-1-s1.bnbchain.org:8545}
+      BSC_WS_URL: ${BSC_WS_URL}
+      BLOXROUTE_AUTH_HEADER: ${BLOXROUTE_AUTH_HEADER}
+      SOLANA_PRIVATE_KEY: ${SOLANA_PRIVATE_KEY}
+      BSC_PRIVATE_KEY: ${BSC_PRIVATE_KEY}
+      LIVE_TRADING_ENABLED: ${LIVE_TRADING_ENABLED:-false}
+      BOT_ENABLED: ${BOT_ENABLED:-true}
+    ports:
+      - "50051:50051"
+    depends_on:
+      redis:
+        condition: service_healthy
+    env_file:
+      - .env
+    restart: unless-stopped
 
   frontend:
     build:
@@ -63,90 +100,14 @@ services:
       PORT: 3000
       NEXT_PUBLIC_API_URL: http://api:5000
       NEXT_PUBLIC_WS_URL: ws://api:5000/ws
-      NEXT_PUBLIC_SOLANA_RPC_URL: ${SOLANA_RPC_URL:-https://api.mainnet-beta.solana.com}
-      NEXT_PUBLIC_BSC_RPC_URL: ${BSC_RPC_URL:-https://bsc-dataseed.binance.org/}
+      NEXT_PUBLIC_SOLANA_RPC_URL: ${SOLANA_RPC_URL:-https://api.devnet.solana.com}
+      NEXT_PUBLIC_BSC_RPC_URL: ${BSC_RPC_URL:-https://data-seed-prebsc-1-s1.bnbchain.org:8545}
     ports:
       - "3000:3000"
     depends_on:
       - api
     env_file:
       - .env
-
-  listener-solana:
-    build:
-      context: .
-      dockerfile: ./services/listener-solana/Dockerfile
-    container_name: sniper-listener-solana
-    environment:
-      REDIS_URL: redis://redis:6379
-      SOLANA_RPC_URL: ${SOLANA_RPC_URL:-https://api.mainnet-beta.solana.com}
-      HELIUS_API_KEY: ${HELIUS_API_KEY}
-      LIVE_TRADING_ENABLED: ${LIVE_TRADING_ENABLED:-false}
-    depends_on:
-      redis:
-        condition: service_healthy
-    env_file:
-      - .env
-    restart: unless-stopped
-
-  listener-bsc:
-    build:
-      context: .
-      dockerfile: ./services/listener-bsc/Dockerfile
-    container_name: sniper-listener-bsc
-    environment:
-      REDIS_URL: redis://redis:6379
-      BSC_RPC_URL: ${BSC_RPC_URL:-https://bsc-dataseed.binance.org/}
-      BSC_WS_URL: ${BSC_WS_URL}
-      LIVE_TRADING_ENABLED: ${LIVE_TRADING_ENABLED:-false}
-    depends_on:
-      redis:
-        condition: service_healthy
-    env_file:
-      - .env
-    restart: unless-stopped
-
-  executor-solana:
-    build:
-      context: .
-      dockerfile: ./services/executor-solana/Dockerfile
-    container_name: sniper-executor-solana
-    environment:
-      REDIS_URL: redis://redis:6379
-      SOLANA_RPC_URL: ${SOLANA_RPC_URL:-https://api.mainnet-beta.solana.com}
-      SOLANA_PRIVATE_KEY: ${SOLANA_PRIVATE_KEY}
-      JUPITER_API_URL: ${JUPITER_API_URL:-https://quote-api.jup.ag/v6}
-      JITO_BLOCK_ENGINE_URL: ${JITO_BLOCK_ENGINE_URL}
-      LIVE_TRADING_ENABLED: ${LIVE_TRADING_ENABLED:-false}
-    depends_on:
-      redis:
-        condition: service_healthy
-      api:
-        condition: service_started
-    env_file:
-      - .env
-    restart: unless-stopped
-
-  executor-bsc:
-    build:
-      context: .
-      dockerfile: ./services/executor-bsc/Dockerfile
-    container_name: sniper-executor-bsc
-    environment:
-      REDIS_URL: redis://redis:6379
-      BSC_RPC_URL: ${BSC_RPC_URL:-https://bsc-dataseed.binance.org/}
-      BSC_PRIVATE_KEY: ${BSC_PRIVATE_KEY}
-      PANCAKE_ROUTER_V2: "0x10ED43C718714eb63d5aA57B78B54704E256024E"
-      BLOXROUTE_AUTH_HEADER: ${BLOXROUTE_AUTH_HEADER}
-      LIVE_TRADING_ENABLED: ${LIVE_TRADING_ENABLED:-false}
-    depends_on:
-      redis:
-        condition: service_healthy
-      api:
-        condition: service_started
-    env_file:
-      - .env
-    restart: unless-stopped
 
 volumes:
   postgres_data:
