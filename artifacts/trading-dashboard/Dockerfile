@@ -18,7 +18,8 @@ COPY lib/common/package.json                    ./lib/common/
 COPY lib/db/package.json                        ./lib/db/
 COPY scripts/package.json                       ./scripts/
 
-RUN pnpm install --frozen-lockfile
+RUN --mount=type=cache,id=pnpm-store,target=/root/.local/share/pnpm/store \
+    pnpm install --frozen-lockfile
 
 # ── Step 2: copy sources only for the packages we need to build
 COPY lib ./lib

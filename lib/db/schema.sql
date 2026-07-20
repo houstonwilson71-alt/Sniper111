@@ -31,10 +31,10 @@ CREATE TABLE IF NOT EXISTS bot_state (
   running BOOLEAN NOT NULL DEFAULT false,
   started_at TIMESTAMP WITH TIME ZONE,
   stopped_at TIMESTAMP WITH TIME ZONE,
-  error TEXT,
+  error TEXT NOT NULL DEFAULT '',
   emergency_stopped BOOLEAN NOT NULL DEFAULT false,
   live_trading_enabled BOOLEAN NOT NULL DEFAULT false,
-  wallet_address TEXT
+  wallet_address TEXT NOT NULL DEFAULT ''
 );
 
 CREATE TABLE IF NOT EXISTS wallet_config (

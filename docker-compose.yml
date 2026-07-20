@@ -1,4 +1,3 @@
-version: "3.8"
 
 services:
   postgres:
@@ -18,6 +17,7 @@ services:
       interval: 5s
       timeout: 5s
       retries: 10
+      start_period: 30s
 
   redis:
     image: redis:7-alpine
@@ -29,6 +29,7 @@ services:
       interval: 5s
       timeout: 5s
       retries: 10
+      start_period: 10s
 
   # Go backend: serves the Next.js frontend, REST + WebSocket endpoints, and bridges to the Rust engine via gRPC.
   api:
@@ -67,18 +68,9 @@ services:
       ENGINE_GRPC_ADDR: 0.0.0.0:50051
       REDIS_URL: redis://redis:6379
       SOLANA_RPC_URL: ${SOLANA_RPC_URL:-https://api.devnet.solana.com}
-      SOLANA_WS_URL: ${SOLANA_WS_URL}
-      YELLOWSTONE_ENDPOINT: ${YELLOWSTONE_ENDPOINT}
-      YELLOWSTONE_TOKEN: ${YELLOWSTONE_TOKEN}
-      HELIUS_API_KEY: ${HELIUS_API_KEY}
       JUPITER_API_URL: ${JUPITER_API_URL:-https://quote-api.jup.ag/v6}
-      JITO_BLOCK_ENGINE_URL: ${JITO_BLOCK_ENGINE_URL}
       JITO_TIP_LAMPORTS: ${JITO_TIP_LAMPORTS:-10000}
       BSC_RPC_URL: ${BSC_RPC_URL:-https://data-seed-prebsc-1-s1.bnbchain.org:8545}
-      BSC_WS_URL: ${BSC_WS_URL}
-      BLOXROUTE_AUTH_HEADER: ${BLOXROUTE_AUTH_HEADER}
-      SOLANA_PRIVATE_KEY: ${SOLANA_PRIVATE_KEY}
-      BSC_PRIVATE_KEY: ${BSC_PRIVATE_KEY}
       LIVE_TRADING_ENABLED: ${LIVE_TRADING_ENABLED:-false}
       BOT_ENABLED: ${BOT_ENABLED:-true}
     ports:
@@ -94,6 +86,7 @@ services:
     build:
       context: .
       dockerfile: ./artifacts/trading-dashboard/Dockerfile
+      network: host
     container_name: sniper-frontend
     environment:
       NODE_ENV: production
