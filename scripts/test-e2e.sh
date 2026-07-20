@@ -3,11 +3,11 @@ set -euo pipefail
 
 # scripts/test-e2e.sh
 # End-to-end integration test for the meme-coin sniper on Solana devnet / BSC testnet.
-# Prereqs: docker, docker-compose, a funded devnet wallet, and optionally solana/spl-token CLI.
+# Prereqs: docker, docker compose, a funded devnet wallet, and optionally solana/spl-token CLI.
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
-COMPOSE="$PROJECT_DIR/docker-compose.yml"
+COMPOSE="$PROJECT_DIR/docker compose.yml"
 ENV_FILE="$PROJECT_DIR/.env"
 
 export COMPOSE_PROJECT_NAME=sniper-e2e
@@ -33,22 +33,22 @@ BSC_RPC_URL=https://data-seed-prebsc-1-s1.bnbchain.org:8545
 EOF
 fi
 
-log "Step 1: docker-compose build"
-docker-compose -f "$COMPOSE" build --parallel || fail "docker-compose build failed"
+log "Step 1: docker compose build"
+docker compose -f "$COMPOSE" build --parallel || fail "docker compose build failed"
 
 log "Step 2: start infrastructure (postgres + redis)"
-docker-compose -f "$COMPOSE" up -d postgres redis || fail "infrastructure failed to start"
+docker compose -f "$COMPOSE" up -d postgres redis || fail "infrastructure failed to start"
 
 log "Step 3: wait for infrastructure health"
 for i in $(seq 1 30); do
-  if docker-compose -f "$COMPOSE" ps | grep -q "Up (healthy)"; then
+  if docker compose -f "$COMPOSE" ps | grep -q "Up (healthy)"; then
     break
   fi
   sleep 2
 done
 
 log "Step 4: start Rust engine and Go API"
-docker-compose -f "$COMPOSE" up -d rust-engine api || fail "backend services failed to start"
+docker compose -f "$COMPOSE" up -d rust-engine api || fail "backend services failed to start"
 
 log "Step 5: wait for API health"
 for i in $(seq 1 30); do
@@ -142,7 +142,7 @@ log "Step 9: stop the bot and reset"
 curl -fsS -X POST http://localhost:5000/api/bot/stop >/dev/null || true
 
 log "Step 10: teardown"
-docker-compose -f "$COMPOSE" down -v || true
+docker compose -f "$COMPOSE" down -v || true
 
 if [ "$DETECTED" = true ] && [ "$BOUGHT" = true ]; then
   log "=== E2E test PASSED ==="
