@@ -18,16 +18,17 @@ pub async fn run(
     event_tx: mpsc::Sender<EngineEvent>,
 ) -> Result<()> {
     let redis_client = redis::Client::open(cfg.redis_url.clone())?;
-    let con = ConnectionManager::new(redis_client).await?;
-    let mut pub_con = con.clone();
-    let mut sub = con.into_pubsub();
+    let mut pub_con = ConnectionManager::new(redis_client.clone()).await?;
+    let mut sub = redis_client.get_async_pubsub().await?;
     sub.subscribe("buy:bsc").await?;
     sub.subscribe("sell:bsc").await?;
     let mut stream = sub.on_message();
 
     let provider = Arc::new(Provider::<Http>::try_from(&cfg.bsc_rpc_url)?);
     let wallet = cfg.bsc_private_key.as_ref().map(|k| {
-        k.parse::<LocalWallet>().map(|w| w.with_chain_id(Chain::BinanceSmartChain as u64))
+        k.parse::<LocalWallet>()
+            .map(|w| w.with_chain_id(Chain::BinanceSmartChain as u64))
+            .map_err(|e| e.to_string())
     });
 
     let router: Address = cfg.pancake_router_v2.parse()?;
@@ -88,22 +89,17 @@ async fn execute_buy(
     let token_addr: Address = token.address.parse()?;
     let amount_in = U256::from((amount_usd / 600.0 * 1e18) as u128); // rough BNB amount
 
-    let router_contract = Contract::<SignerMiddleware<Arc<Provider<Http>>, LocalWallet>>::from_json(
-        client.clone(),
-        router,
-        PANCAKE_ROUTER_V2_ABI.as_bytes(),
-    )?;
+    let abi: ethers::abi::Abi = serde_json::from_str(PANCAKE_ROUTER_V2_ABI)?;
+    let router_contract = Contract::new(router, abi, Arc::new(client.clone()));
 
     let path = vec![wbnb, token_addr];
     let deadline = U256::from(chrono::Utc::now().timestamp() + 60);
 
-    let tx = router_contract
+    let call = router_contract
         .method::<_, H256>("swapExactETHForTokens", (U256::zero(), path, wallet.address(), deadline))?
-        .value(amount_in)
-        .send()
-        .await?;
-
-    let tx_hash = format!("{:?}", tx.tx_hash());
+        .value(amount_in);
+    let pending = call.send().await?;
+    let tx_hash = format!("{:?}", pending.tx_hash());
     info!("BSC buy tx: {}", tx_hash);
 
     let trade = build_bsc_trade(token, "buy", amount_usd, Some(tx_hash.clone()), "confirmed");
@@ -169,18 +165,15 @@ async fn execute_sell(
     let amount_in = U256::from((position.size_usd * sell_pct / 100.0 / 600.0 * 1e18) as u128);
     let deadline = U256::from(chrono::Utc::now().timestamp() + 60);
 
-    let router_contract = Contract::<SignerMiddleware<Arc<Provider<Http>>, LocalWallet>>::from_json(
-        client.clone(),
-        router,
-        PANCAKE_ROUTER_V2_ABI.as_bytes(),
-    )?;
+    let abi: ethers::abi::Abi = serde_json::from_str(PANCAKE_ROUTER_V2_ABI)?;
+    let router_contract = Contract::new(router, abi, Arc::new(client.clone()));
 
-    let tx = router_contract
-        .method::<_, H256>("swapExactTokensForETH", (amount_in, U256::zero(), vec![token_addr, wbnb], wallet.address(), deadline))?
-        .send()
+    let sell_call = router_contract
+        .method::<_, H256>("swapExactTokensForETH", (amount_in, U256::zero(), vec![token_addr, wbnb], wallet.address(), deadline))?;
+    let pending = sell_call.send()
         .await?;
 
-    let tx_hash = format!("{:?}", tx.tx_hash());
+    let tx_hash = format!("{:?}", pending.tx_hash());
     info!("BSC sell tx: {}", tx_hash);
 
     let trade = build_bsc_sell_trade(position, sell_pct, reason, Some(tx_hash.clone()));
@@ -254,6 +247,6 @@ async fn publish_trade(con: &mut ConnectionManager, trade: &Trade) -> Result<()>
         "timestamp": chrono::Utc::now().to_rfc3339(),
         "payload": trade,
     });
-    con.publish("trades:new", serde_json::to_string(&event)?).await?;
+    let _: () = con.publish("trades:new", serde_json::to_string(&event)?).await?;
     Ok(())
 }

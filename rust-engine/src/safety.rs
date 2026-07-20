@@ -1,11 +1,10 @@
 use std::time::Duration;
 use anyhow::Result;
 use serde_json::json;
-use tracing::warn;
 
 use crate::types::Token;
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone)]
 pub struct SafetyResult {
     pub passed: bool,
     pub reasons: Vec<String>,

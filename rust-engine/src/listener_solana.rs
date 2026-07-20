@@ -38,8 +38,13 @@ async fn yellowstone_loop(
     let endpoint = cfg.yellowstone_endpoint.unwrap();
     let token = cfg.yellowstone_token.unwrap();
 
-    let mut client = GeyserGrpcClient::connect(endpoint, Some(token), None)
+    let mut client = GeyserGrpcClient::build_from_shared(endpoint)
+        .map_err(|e| anyhow::anyhow!("{}", e))?
+        .x_token(Some(token))
+        .map_err(|e| anyhow::anyhow!("{}", e))?
+        .connect()
         .await
+        .map_err(|e| anyhow::anyhow!("{}", e))
         .context("connect to Yellowstone gRPC")?;
 
     let request = SubscribeRequest {
@@ -51,6 +56,7 @@ async fn yellowstone_loop(
                     account: vec![],
                     owner: vec!["675kPX9MHTjS2zt1qfr1NYHuzeLXfQM9H24wFSUt1Mp8".to_string()],
                     filters: vec![],
+                    ..Default::default()
                 },
             );
             m.insert(
@@ -59,6 +65,7 @@ async fn yellowstone_loop(
                     account: vec![],
                     owner: vec!["9WzDXwBbmkg8ZTbNMqUxvTA1ebJ3x8T5xC8g5rZxX7Ty".to_string()],
                     filters: vec![],
+                    ..Default::default()
                 },
             );
             m.insert(
@@ -67,6 +74,7 @@ async fn yellowstone_loop(
                     account: vec![],
                     owner: vec!["LBUZKhRxPFbXh7uMVbP65mNxkZ7P76H7m6vMuo5hLM9".to_string()],
                     filters: vec![],
+                    ..Default::default()
                 },
             );
             m
@@ -75,15 +83,19 @@ async fn yellowstone_loop(
         ..Default::default()
     };
 
-    let mut stream = client.subscribe_with_request(Some(request)).await?;
+    let (_sink, mut stream) = client.subscribe_with_request(Some(request))
+        .await
+        .map_err(|e| anyhow::anyhow!("{}", e))?;
     info!("Yellowstone gRPC subscription active");
 
+    use yellowstone_grpc_proto::geyser::subscribe_update::UpdateOneof;
     while let Some(update) = stream.next().await {
         match update {
             Ok(msg) => {
-                if let Some(account) = msg.account {
-                    let pool = account.account.as_ref().context("no account in update")?;
-                    let token = pool_account_to_token(&pool.pubkey, &pool.data, &cfg.solana_rpc).await?;
+                if let Some(UpdateOneof::Account(account_update)) = msg.update_oneof {
+                    let pool = account_update.account.as_ref().context("no account in update")?;
+                    let pubkey_str = bs58::encode(&pool.pubkey).into_string();
+                    let token = pool_account_to_token(&pubkey_str, &pool.data, &cfg.solana_rpc_url).await?;
                     let event = EngineEvent::TokenDetected(token.clone());
                     let _ = event_tx.send(event).await;
                     publish_redis(&mut con, "tokens:new", &token).await?;
@@ -215,7 +227,7 @@ async fn publish_redis(con: &mut ConnectionManager, channel: &str, token: &Token
         "timestamp": chrono::Utc::now().to_rfc3339(),
         "payload": token,
     });
-    con.publish(channel, serde_json::to_string(&event)?).await?;
+    let _: () = con.publish(channel, serde_json::to_string(&event)?).await?;
     Ok(())
 }
 

@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::time::Duration;
 use anyhow::Result;
+use futures::StreamExt;
 use redis::{aio::ConnectionManager, AsyncCommands};
 use serde_json::json;
 use tokio::sync::mpsc;
@@ -13,8 +14,7 @@ use crate::types::{EngineEvent, Token};
 
 pub async fn run(cfg: EngineConfig, event_tx: mpsc::Sender<EngineEvent>) -> Result<()> {
     let redis_client = redis::Client::open(cfg.redis_url.clone())?;
-    let con = ConnectionManager::new(redis_client).await?;
-    let mut sub = con.into_pubsub();
+    let mut sub = redis_client.get_async_pubsub().await?;
     sub.subscribe("tokens:new").await?;
     let mut stream = sub.on_message();
 

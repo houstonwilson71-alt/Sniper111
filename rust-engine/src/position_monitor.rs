@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::time::Duration;
 use anyhow::Result;
+use futures::StreamExt;
 use redis::{aio::ConnectionManager, AsyncCommands};
 use serde_json::json;
 use tokio::sync::mpsc;
@@ -16,9 +17,8 @@ pub async fn run(
     mut cmd_rx: mpsc::Receiver<Command>,
 ) -> Result<()> {
     let redis_client = redis::Client::open(cfg.redis_url.clone())?;
-    let con = ConnectionManager::new(redis_client).await?;
-    let mut pub_con = con.clone();
-    let mut sub = con.into_pubsub();
+    let mut pub_con = ConnectionManager::new(redis_client.clone()).await?;
+    let mut sub = redis_client.get_async_pubsub().await?;
     sub.subscribe("trades:new").await?;
     let mut trade_stream = sub.on_message();
 
@@ -88,7 +88,7 @@ async fn evaluate_exits(
         pos.tp1_hit = true;
         pos.trailing_stop_active = true;
         pos.stop_loss_price = pos.peak_price_usd * (1.0 - cfg.trailing_stop_pct / 100.0);
-        emit_sell(cfg, &pos.id, pos, "tp1", cfg.tp1_sell_pct, event_tx, con).await?;
+        emit_sell(cfg, "", pos, "tp1", cfg.tp1_sell_pct, event_tx, con).await?;
     }
 
     // Trailing stop
@@ -98,7 +98,7 @@ async fn evaluate_exits(
             pos.stop_loss_price = new_stop;
         }
         if pos.current_price_usd <= pos.stop_loss_price {
-            emit_sell(cfg, &pos.id, pos, "trailing_stop", 100.0, event_tx, con).await?;
+            emit_sell(cfg, "", pos, "trailing_stop", 100.0, event_tx, con).await?;
         }
     }
 
@@ -106,7 +106,7 @@ async fn evaluate_exits(
     let opened = chrono::DateTime::parse_from_rfc3339(&pos.opened_at)?;
     let elapsed = chrono::Utc::now().signed_duration_since(opened);
     if elapsed.num_minutes() >= cfg.time_exit_minutes as i64 && pct < cfg.time_exit_min_profit_pct {
-        emit_sell(cfg, &pos.id, pos, "time_exit", 100.0, event_tx, con).await?;
+        emit_sell(cfg, "", pos, "time_exit", 100.0, event_tx, con).await?;
     }
 
     Ok(())
@@ -137,7 +137,7 @@ async fn emit_sell(
         "timestamp": chrono::Utc::now().to_rfc3339(),
         "payload": event,
     });
-    con.publish(channel, serde_json::to_string(&wrapped)?).await?;
+    let _: () = con.publish(channel, serde_json::to_string(&wrapped)?).await?;
     event_tx.send(event).await.ok();
     persist_position(con, pos).await?;
     Ok(())
@@ -146,7 +146,7 @@ async fn emit_sell(
 async fn persist_position(con: &mut ConnectionManager, pos: &Position) -> Result<()> {
     let key = format!("position:{}", pos.id);
     let value = serde_json::to_string(pos)?;
-    con.set_ex(key, value, 86400).await?;
+    let _: () = con.set_ex(key, value, 86400_u64).await?;
     Ok(())
 }
 

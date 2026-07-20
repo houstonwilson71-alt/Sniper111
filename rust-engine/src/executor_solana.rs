@@ -2,6 +2,7 @@ use std::str::FromStr;
 use anyhow::{anyhow, Context, Result};
 use base64::engine::general_purpose::STANDARD as BASE64;
 use base64::Engine;
+use futures::StreamExt;
 use redis::{aio::ConnectionManager, AsyncCommands};
 use serde_json::{json, Value};
 use solana_sdk::commitment_config::CommitmentConfig;
@@ -14,7 +15,7 @@ use tokio::sync::mpsc;
 use tracing::{info, warn, error};
 
 use crate::config::EngineConfig;
-use crate::types::{EngineEvent, Position, Trade, TradeStatus};
+use crate::types::{EngineEvent, Position, Trade};
 
 pub async fn run(
     cfg: EngineConfig,
@@ -22,9 +23,8 @@ pub async fn run(
     mut cmd_rx: mpsc::Receiver<crate::types::Command>,
 ) -> Result<()> {
     let redis_client = redis::Client::open(cfg.redis_url.clone())?;
-    let con = ConnectionManager::new(redis_client).await?;
-    let mut pub_con = con.clone();
-    let mut sub = con.into_pubsub();
+    let mut pub_con = ConnectionManager::new(redis_client.clone()).await?;
+    let mut sub = redis_client.get_async_pubsub().await?;
     sub.subscribe("buy:solana").await?;
     sub.subscribe("sell:solana").await?;
     let mut stream = sub.on_message();
@@ -88,7 +88,7 @@ async fn execute_buy(
     amount_usd: f64,
     slippage_pct: f64,
     jito_tip_lamports: u64,
-    keypair: Option<&Result<Keypair, String>>,
+    keypair: Option<&Keypair>,
     con: &mut ConnectionManager,
     event_tx: &mpsc::Sender<EngineEvent>,
 ) -> Result<()> {
@@ -105,7 +105,7 @@ async fn execute_buy(
         return Ok(());
     }
 
-    let kp = keypair.context("no keypair")?.as_ref().map_err(|e| anyhow!("{}", e))?;
+    let kp = keypair.context("no keypair")?;
     let client = reqwest::Client::new();
 
     // 1. Jupiter quote: WSOL -> token
@@ -144,7 +144,7 @@ async fn execute_buy(
             "jsonrpc": "2.0",
             "id": 1,
             "method": "sendBundle",
-            "params": [[BASE64.encode(tx.serialize())], { "tip": jito_tip_lamports }]
+            "params": [[BASE64.encode(bincode::serialize(&tx)?)], { "tip": jito_tip_lamports }]
         });
         let res: Value = client
             .post(jito_url)
@@ -164,7 +164,7 @@ async fn execute_buy(
             "jsonrpc": "2.0",
             "id": 1,
             "method": "sendTransaction",
-            "params": [BASE64.encode(tx.serialize()), { "encoding": "base64", "commitment": "confirmed" }]
+            "params": [BASE64.encode(bincode::serialize(&tx)?), { "encoding": "base64", "commitment": "confirmed" }]
         });
         let res: Value = client.post(&cfg.solana_rpc_url).json(&rpc_body).send().await?.json().await?;
         let tx_hash = res["result"].as_str().unwrap_or("unknown").to_string();
@@ -205,7 +205,7 @@ async fn execute_sell(
     reason: &str,
     sell_pct: f64,
     target_price_usd: Option<f64>,
-    keypair: Option<&Result<Keypair, String>>,
+    keypair: Option<&Keypair>,
     con: &mut ConnectionManager,
     event_tx: &mpsc::Sender<EngineEvent>,
 ) -> Result<()> {
@@ -222,7 +222,7 @@ async fn execute_sell(
         return Ok(());
     }
 
-    let kp = keypair.context("no keypair")?.as_ref().map_err(|e| anyhow!("{}", e))?;
+    let kp = keypair.context("no keypair")?;
     let client = reqwest::Client::new();
 
     // Sell token -> WSOL
@@ -253,7 +253,7 @@ async fn execute_sell(
         "jsonrpc": "2.0",
         "id": 1,
         "method": "sendTransaction",
-        "params": [BASE64.encode(tx.serialize()), { "encoding": "base64", "commitment": "confirmed" }]
+        "params": [BASE64.encode(bincode::serialize(&tx)?), { "encoding": "base64", "commitment": "confirmed" }]
     });
     let res: Value = client.post(&cfg.solana_rpc_url).json(&rpc_body).send().await?.json().await?;
     let tx_hash = res["result"].as_str().unwrap_or("unknown").to_string();
@@ -311,6 +311,6 @@ async fn publish_trade(con: &mut ConnectionManager, trade: &Trade) -> Result<()>
         "timestamp": chrono::Utc::now().to_rfc3339(),
         "payload": trade,
     });
-    con.publish("trades:new", serde_json::to_string(&event)?).await?;
+    let _: () = con.publish("trades:new", serde_json::to_string(&event)?).await?;
     Ok(())
 }

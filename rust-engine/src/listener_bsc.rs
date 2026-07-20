@@ -1,5 +1,6 @@
 use std::time::Duration;
 use anyhow::{Context, Result};
+use futures::StreamExt;
 use redis::{aio::ConnectionManager, AsyncCommands};
 use serde_json::json;
 use tokio::sync::mpsc;
@@ -31,15 +32,15 @@ async fn bsc_ws_loop(
     event_tx: mpsc::Sender<EngineEvent>,
     mut con: ConnectionManager,
 ) -> Result<()> {
-    use ethers::providers::{Provider, Ws};
-    use ethers::types::{Filter, H256};
+    use ethers::providers::{Provider, Ws, Middleware};
+    use ethers::types::{Address, Filter};
 
     let provider = Provider::<Ws>::connect(ws_url).await.context("connect BSC WebSocket")?;
     let filter = Filter::new()
-        .address(PANCAKE_FACTORY_V2.parse::<H256>().unwrap())
+        .address(PANCAKE_FACTORY_V2.parse::<Address>().unwrap())
         .event("PairCreated(address,address,address,uint256)");
 
-    let mut stream = provider.subscribe_logs(&filter).await?.0;
+    let mut stream = provider.subscribe_logs(&filter).await?;
     info!("BSC PairCreated subscription active");
 
     while let Some(log) = stream.next().await {
@@ -162,6 +163,6 @@ async fn publish_redis(con: &mut ConnectionManager, channel: &str, token: &Token
         "timestamp": chrono::Utc::now().to_rfc3339(),
         "payload": token,
     });
-    con.publish(channel, serde_json::to_string(&event)?).await?;
+    let _: () = con.publish(channel, serde_json::to_string(&event)?).await?;
     Ok(())
 }

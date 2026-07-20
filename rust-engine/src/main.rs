@@ -1,5 +1,3 @@
-use std::env;
-use std::net::SocketAddr;
 use anyhow::Result;
 use tokio::sync::mpsc;
 use tracing::{info, error};
@@ -33,8 +31,9 @@ async fn main() -> Result<()> {
 
     // Start gRPC server so the Go backend can connect and stream commands/events.
     let grpc_server = EngineGrpcServer::new(cmd_tx, event_rx);
+    let grpc_addr = cfg.grpc_addr.parse().unwrap_or_else(|_| "0.0.0.0:50051".parse().unwrap());
     let grpc_handle = tokio::spawn(async move {
-        if let Err(e) = grpc_server.serve(cfg.grpc_addr.parse().unwrap_or_else(|_| "0.0.0.0:50051".parse().unwrap())).await {
+        if let Err(e) = grpc_server.serve(grpc_addr).await {
             error!("gRPC server error: {}", e);
         }
     });
@@ -42,7 +41,9 @@ async fn main() -> Result<()> {
     // Start chain listeners and executors.
     let sol_handle = tokio::spawn(listener_solana::run(cfg.clone(), event_tx.clone()));
     let bsc_handle = tokio::spawn(listener_bsc::run(cfg.clone(), event_tx.clone()));
-    let sol_exec = tokio::spawn(executor_solana::run(cfg.clone(), event_tx.clone(), cmd_rx.clone()));
+    // Executor solana gets its own command channel (commands are optional; gRPC drives via grpc cmd_rx → position_monitor).
+    let (_, sol_cmd_rx) = mpsc::channel::<Command>(1);
+    let sol_exec = tokio::spawn(executor_solana::run(cfg.clone(), event_tx.clone(), sol_cmd_rx));
     let bsc_exec = tokio::spawn(executor_bsc::run(cfg.clone(), event_tx.clone()));
     let pos_monitor = tokio::spawn(position_monitor::run(cfg.clone(), event_tx.clone(), cmd_rx));
 

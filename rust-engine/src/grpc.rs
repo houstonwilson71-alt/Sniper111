@@ -20,14 +20,14 @@ use proto::{
 
 pub struct EngineGrpcServer {
     cmd_tx: mpsc::Sender<Command>,
-    event_rx: Arc<Mutex<mpsc::Receiver<EngineEvent>>>,
+    event_rx: Arc<Mutex<Option<mpsc::Receiver<EngineEvent>>>>,
 }
 
 impl EngineGrpcServer {
     pub fn new(cmd_tx: mpsc::Sender<Command>, event_rx: mpsc::Receiver<EngineEvent>) -> Self {
         Self {
             cmd_tx,
-            event_rx: Arc::new(Mutex::new(event_rx)),
+            event_rx: Arc::new(Mutex::new(Some(event_rx))),
         }
     }
 
@@ -69,7 +69,8 @@ impl Engine for EngineGrpcServer {
         });
 
         // Stream events back to Go backend
-        let rx = event_rx.lock().await;
+        let mut rx_guard = event_rx.lock().await;
+        let rx = rx_guard.take().ok_or_else(|| Status::internal("event stream already consumed"))?;
         let stream = ReceiverStream::new(rx).map(|event| Ok(convert_event(event)));
         Ok(Response::new(Box::pin(stream)))
     }
