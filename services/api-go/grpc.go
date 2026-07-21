@@ -33,34 +33,39 @@ func mustInitEngineBridge(wss *webSocketHub, db *DB) *engineBridge {
 		addr = "rust-engine:50051"
 	}
 
-	conn, err := grpc.NewClient(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
-	if err != nil {
-		log.Printf("WARN: could not connect to Rust engine gRPC at %s: %v. Dashboard will show local DB state only.", addr, err)
-		return &engineBridge{wss: wss, db: db}
-	}
+	bridge := &engineBridge{wss: wss, db: db}
 
-	client := engine.NewEngineClient(conn)
-	stream, err := client.Connect(context.Background())
-	if err != nil {
-		log.Printf("WARN: could not open engine stream: %v", err)
-		return &engineBridge{wss: wss, db: db}
-	}
+	// Connect to the Rust engine asynchronously so the HTTP server can start
+	// immediately without blocking on gRPC availability.
+	go func() {
+		conn, err := grpc.NewClient(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+		if err != nil {
+			log.Printf("WARN: could not create gRPC client for Rust engine at %s: %v. Dashboard will show local DB state only.", addr, err)
+			return
+		}
 
-	bridge := &engineBridge{
-		client: client,
-		stream: stream,
-		wss:    wss,
-		db:     db,
-	}
+		client := engine.NewEngineClient(conn)
+		// Use a context without a deadline so the bidirectional stream stays open
+		// as long as the Rust engine is alive.
+		stream, err := client.Connect(context.Background())
+		if err != nil {
+			log.Printf("WARN: could not open engine stream: %v. Dashboard will show local DB state only.", err)
+			_ = conn.Close()
+			return
+		}
 
-	// Send the current config once at startup.
-	cfg, _ := db.GetConfig()
-	if cfg != nil {
-		bridge.sendConfig(*cfg)
-	}
+		bridge.client = client
+		bridge.stream = stream
 
-	// Receive events from the Rust engine and fan out to WebSocket clients.
-	go bridge.receiveLoop()
+		// Send the current config once at startup.
+		cfg, _ := db.GetConfig()
+		if cfg != nil {
+			bridge.sendConfig(*cfg)
+		}
+
+		// Receive events from the Rust engine and fan out to WebSocket clients.
+		bridge.receiveLoop()
+	}()
 
 	return bridge
 }

@@ -170,7 +170,7 @@ func (db *DB) GetTokens() ([]Token, error) {
 		return nil, err
 	}
 	defer rows.Close()
-	var out []Token
+	out := make([]Token, 0)
 	for rows.Next() {
 		var t Token
 		var failReasons []byte
@@ -195,7 +195,7 @@ func (db *DB) GetTrades() ([]Trade, error) {
 		return nil, err
 	}
 	defer rows.Close()
-	var out []Trade
+	out := make([]Trade, 0)
 	for rows.Next() {
 		var t Trade
 		_ = rows.Scan(&t.ID, &t.TokenID, &t.TokenSymbol, &t.TokenAddress, &t.Chain, &t.PositionID, &t.Side,
@@ -216,7 +216,7 @@ func (db *DB) GetPositions() ([]Position, error) {
 		return nil, err
 	}
 	defer rows.Close()
-	var out []Position
+	out := make([]Position, 0)
 	for rows.Next() {
 		var p Position
 		_ = rows.Scan(&p.ID, &p.TokenID, &p.TokenSymbol, &p.TokenAddress, &p.Chain, &p.EntryPriceUsd, &p.CurrentPriceUsd,
@@ -257,7 +257,7 @@ func (db *DB) GetEquity() ([]EquityPoint, error) {
 		return nil, err
 	}
 	defer rows.Close()
-	var out []EquityPoint
+	out := make([]EquityPoint, 0)
 	for rows.Next() {
 		var e EquityPoint
 		_ = rows.Scan(&e.Timestamp, &e.EquityUsd, &e.PnlUsd)

@@ -1,4 +1,3 @@
-
 services:
   postgres:
     image: postgres:16-alpine
@@ -57,29 +56,28 @@ services:
       - .env
 
   # Rust engine: unified chain listeners, filter, safety, execution and position monitoring.
-  # Commented out because Rust compilation is too heavy for this environment.
-  # rust-engine:
-  #   build:
-  #     context: .
-  #     dockerfile: ./rust-engine/Dockerfile
-  #   container_name: sniper-rust-engine
-  #   environment:
-  #     ENGINE_GRPC_ADDR: 0.0.0.0:50051
-  #     REDIS_URL: redis://redis:6379
-  #     SOLANA_RPC_URL: ${SOLANA_RPC_URL:-https://api.devnet.solana.com}
-  #     JUPITER_API_URL: ${JUPITER_API_URL:-https://quote-api.jup.ag/v6}
-  #     JITO_TIP_LAMPORTS: ${JITO_TIP_LAMPORTS:-10000}
-  #     BSC_RPC_URL: ${BSC_RPC_URL:-https://data-seed-prebsc-1-s1.bnbchain.org:8545}
-  #     LIVE_TRADING_ENABLED: ${LIVE_TRADING_ENABLED:-false}
-  #     BOT_ENABLED: ${BOT_ENABLED:-true}
-  #   ports:
-  #     - "50051:50051"
-  #   depends_on:
-  #     redis:
-  #       condition: service_started
-  #   env_file:
-  #     - .env
-  #   restart: unless-stopped
+  rust-engine:
+    build:
+      context: .
+      dockerfile: ./rust-engine/Dockerfile
+    container_name: sniper-rust-engine
+    environment:
+      ENGINE_GRPC_ADDR: 0.0.0.0:50051
+      REDIS_URL: redis://redis:6379
+      SOLANA_RPC_URL: ${SOLANA_RPC_URL:-https://api.devnet.solana.com}
+      JUPITER_API_URL: ${JUPITER_API_URL:-https://quote-api.jup.ag/v6}
+      JITO_TIP_LAMPORTS: ${JITO_TIP_LAMPORTS:-10000}
+      BSC_RPC_URL: ${BSC_RPC_URL:-https://data-seed-prebsc-1-s1.bnbchain.org:8545}
+      LIVE_TRADING_ENABLED: ${LIVE_TRADING_ENABLED:-false}
+      BOT_ENABLED: ${BOT_ENABLED:-true}
+    ports:
+      - "50051:50051"
+    depends_on:
+      redis:
+        condition: service_started
+    env_file:
+      - .env
+    restart: unless-stopped
 
   frontend:
     build:
